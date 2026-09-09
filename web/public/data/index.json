@@ -1,0 +1,32 @@
+{
+  "maps": [
+    {
+      "mapId": "AmbroseValley",
+      "label": "Ambrose Valley",
+      "matches": 566,
+      "journeys": 836
+    },
+    {
+      "mapId": "GrandRift",
+      "label": "Grand Rift",
+      "matches": 59,
+      "journeys": 111
+    },
+    {
+      "mapId": "Lockdown",
+      "label": "Lockdown",
+      "matches": 171,
+      "journeys": 295
+    }
+  ],
+  "eventTypes": [
+    "Position",
+    "BotPosition",
+    "Loot",
+    "BotKill",
+    "BotKilled",
+    "KilledByStorm",
+    "Kill",
+    "Killed"
+  ]
+}
