@@ -1,6 +1,7 @@
 import type { MapIndexEntry, MapPayload } from "../types";
 import { css, EVENT_COLOR, EVENT_LABEL, HUMAN, BOT, MARKER_EVENTS } from "../lib/colors";
-import { toggle, type Filters } from "../lib/filters";
+import { toggle, type Filters, type MatchRow } from "../lib/filters";
+import MatchList from "./MatchList";
 
 interface Props {
   maps: MapIndexEntry[];
@@ -9,6 +10,7 @@ interface Props {
   payload: MapPayload | null;
   dates: string[];
   counts: Record<string, number>;
+  matches: MatchRow[];
   filters: Filters;
   onChange: (f: Filters) => void;
 }
@@ -16,7 +18,7 @@ interface Props {
 const dayLabel = (d: string) => d.slice(8) + " Feb";
 
 export default function FilterRail(props: Props) {
-  const { maps, mapId, onMapChange, dates, counts, filters, onChange } = props;
+  const { maps, mapId, onMapChange, dates, counts, matches, filters, onChange } = props;
   const set = (patch: Partial<Filters>) => onChange({ ...filters, ...patch });
 
   return (
@@ -24,6 +26,23 @@ export default function FilterRail(props: Props) {
       <div className="brand">
         <span className="dot" />
         LILA BLACK
+      </div>
+
+      <div className="modes">
+        <button
+          className={filters.mode === "explore" ? "mode on" : "mode"}
+          onClick={() => set({ mode: "explore" })}
+        >
+          Explore
+        </button>
+        <button
+          className={filters.mode === "match" ? "mode on" : "mode"}
+          onClick={() =>
+            set({ mode: "match", matchId: filters.matchId ?? matches[0]?.id ?? null })
+          }
+        >
+          Match
+        </button>
       </div>
 
       <section>
@@ -40,6 +59,13 @@ export default function FilterRail(props: Props) {
         ))}
       </section>
 
+      {filters.mode === "match" ? (
+        <MatchList
+          rows={matches}
+          selected={filters.matchId}
+          onSelect={(id) => set({ matchId: id })}
+        />
+      ) : (
       <section>
         <h2>
           Date
@@ -62,6 +88,7 @@ export default function FilterRail(props: Props) {
         </div>
         {filters.dates.length === 0 && <p className="hint">All dates</p>}
       </section>
+      )}
 
       <section>
         <h2>Who</h2>

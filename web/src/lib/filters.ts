@@ -1,7 +1,11 @@
 import type { EventType, Journey, MapPayload } from "../types";
 import { MARKER_EVENTS } from "./colors";
 
+export type Mode = "explore" | "match";
+
 export interface Filters {
+  mode: Mode;
+  matchId: string | null;
   dates: string[]; // empty means every date
   humans: boolean;
   bots: boolean;
@@ -12,6 +16,8 @@ export interface Filters {
 }
 
 export const defaultFilters = (): Filters => ({
+  mode: "explore",
+  matchId: null,
   dates: [],
   humans: true,
   bots: true,
@@ -28,8 +34,33 @@ export function datesOf(p: MapPayload): string[] {
 export function filterJourneys(p: MapPayload, f: Filters): Journey[] {
   return p.journeys.filter((j) => {
     if (j.bot ? !f.bots : !f.humans) return false;
+    if (f.mode === "match") return p.matches[j.m].id === f.matchId;
     return f.dates.length === 0 || f.dates.includes(p.matches[j.m].date);
   });
+}
+
+export interface MatchRow {
+  id: string;
+  date: string;
+  dur: number;
+  humans: number;
+  bots: number;
+  events: number;
+  players: number;
+}
+
+export function matchRows(p: MapPayload): MatchRow[] {
+  return p.matches
+    .map((m) => ({
+      id: m.id,
+      date: m.date,
+      dur: m.dur,
+      humans: m.humans,
+      bots: m.bots,
+      players: m.journeys.length,
+      events: m.journeys.reduce((n, ji) => n + p.journeys[ji].ev.length, 0),
+    }))
+    .sort((a, b) => b.players - a.players || b.dur - a.dur);
 }
 
 export interface MarkerPoint {

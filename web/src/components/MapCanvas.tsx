@@ -10,6 +10,7 @@ interface Props {
   showPaths: boolean;
   dim: number;
   pathAlpha: number;
+  time: number | null; // null = whole match, otherwise seconds since match start
   fitToken: number;
 }
 
@@ -21,8 +22,20 @@ const HIT_R = 7;
 
 const fitScale = (w: number, h: number) => (Math.min(w, h) * 0.94) / WORLD;
 
+// How many samples of a journey have happened by t. times is sorted.
+function upTo(times: number[], t: number) {
+  let lo = 0;
+  let hi = times.length;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (times[mid] <= t) lo = mid + 1;
+    else hi = mid;
+  }
+  return lo;
+}
+
 export default function MapCanvas({
-  bitmap, paths, markers, showPaths, dim, pathAlpha, fitToken,
+  bitmap, paths, markers, showPaths, dim, pathAlpha, time, fitToken,
 }: Props) {
   const wrap = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
@@ -78,7 +91,7 @@ export default function MapCanvas({
       }
     }
 
-    if (showPaths) {
+    if (showPaths && time === null) {
       ctx.lineWidth = 1 / scale; // constant 1px on screen
       ctx.lineJoin = "round";
       ctx.globalAlpha = pathAlpha;
@@ -95,6 +108,21 @@ export default function MapCanvas({
         ctx.stroke(path);
       }
       ctx.globalAlpha = 1;
+    } else if (showPaths && time !== null) {
+      // Scrubbing: redraw each route only as far as the clock has reached.
+      ctx.lineWidth = 1 / scale;
+      ctx.lineJoin = "round";
+      ctx.globalAlpha = Math.min(pathAlpha * 1.6, 0.75);
+      for (const g of paths) {
+        const n = upTo(g.times, time);
+        if (n < 2) continue;
+        const p = new Path2D();
+        p.moveTo(g.coords[0][0], g.coords[0][1]);
+        for (let i = 1; i < n; i++) p.lineTo(g.coords[i][0], g.coords[i][1]);
+        ctx.strokeStyle = g.journey.bot ? css(BOT) : css(HUMAN);
+        ctx.stroke(p);
+      }
+      ctx.globalAlpha = 1;
     }
     ctx.restore();
 
@@ -104,6 +132,7 @@ export default function MapCanvas({
     const r = interacting.current ? MARKER_R * 0.8 : MARKER_R;
     const byType = new Map<string, Path2D>();
     for (const m of markers) {
+      if (time !== null && m.t > time) continue;
       const sx = (m.position[0] - cx) * scale + w / 2;
       const sy = (m.position[1] - cy) * scale + h / 2;
       if (sx < -8 || sy < -8 || sx > w + 8 || sy > h + 8) continue;
@@ -117,8 +146,30 @@ export default function MapCanvas({
       ctx.fillStyle = css(EVENT_COLOR[type] ?? [200, 200, 200]);
       ctx.fill(p);
     }
+
+    // Where everyone actually is at this instant.
+    if (time !== null) {
+      // Shrink the dots when the whole map is playing back at once.
+      const hr = paths.length > 150 ? 2 : 3.6;
+      const heads = { human: new Path2D(), bot: new Path2D() };
+      for (const g of paths) {
+        const n = upTo(g.times, time);
+        if (n < 1) continue;
+        const [wx, wy] = g.coords[n - 1];
+        const sx = (wx - cx) * scale + w / 2;
+        const sy = (wy - cy) * scale + h / 2;
+        const p = g.journey.bot ? heads.bot : heads.human;
+        p.moveTo(sx + hr, sy);
+        p.arc(sx, sy, hr, 0, Math.PI * 2);
+      }
+      ctx.globalAlpha = 1;
+      ctx.fillStyle = css(HUMAN);
+      ctx.fill(heads.human);
+      ctx.fillStyle = css(BOT);
+      ctx.fill(heads.bot);
+    }
     ctx.restore();
-  }, [bitmap, markers, showPaths, dim, pathAlpha]);
+  }, [bitmap, markers, showPaths, dim, pathAlpha, time, paths]);
 
   const schedule = useCallback(() => {
     if (frame.current) return;
