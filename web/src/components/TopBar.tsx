@@ -11,17 +11,23 @@ interface Props {
   matchCount: number;
   journeyCount: number;
   eventCount: number;
+  onToggleLeft: () => void;
+  onToggleRight: () => void;
 }
 
 export default function TopBar(props: Props) {
   const {
     maps, mapId, onMapChange, filters, onChange, firstMatchId,
-    matchCount, journeyCount, eventCount,
+    matchCount, journeyCount, eventCount, onToggleLeft, onToggleRight,
   } = props;
   const set = (patch: Partial<Filters>) => onChange({ ...filters, ...patch });
 
   return (
     <header className="topbar">
+      <button className="drawer-btn left" onClick={onToggleLeft} aria-label="Toggle data panel">
+        ☰
+      </button>
+
       <div className="logo">
         <b>BLACKBOX</b>
         <i>LILA Black</i>
@@ -69,6 +75,9 @@ export default function TopBar(props: Props) {
           Match
         </button>
       </div>
+      <button className="drawer-btn right" onClick={onToggleRight} aria-label="Toggle layers panel">
+        ▦
+      </button>
     </header>
   );
 }

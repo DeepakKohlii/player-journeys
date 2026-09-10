@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from "react";
-import { loadIndex, loadMap, toGeometry, WORLD } from "./lib/data";
+import { contentBounds, loadIndex, loadMap, toGeometry, WORLD } from "./lib/data";
 import {
   countEvents, datesOf, defaultFilters, filterJourneys, markersOf, matchRows, type Filters,
 } from "./lib/filters";
@@ -21,6 +21,7 @@ export default function App() {
   const [bitmap, setBitmap] = useState<ImageBitmap | null>(null);
   const [fitToken, setFitToken] = useState(0);
   const [entered, setEntered] = useState(() => location.hash === "#console");
+  const [openPanel, setOpenPanel] = useState<"left" | "right" | null>(null);
   const [time, setTime] = useState<number | null>(null);
   const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState(4);
@@ -69,6 +70,8 @@ export default function App() {
   const dates = useMemo(() => (payload ? datesOf(payload) : []), [payload]);
 
   const matches = useMemo(() => (payload ? matchRows(payload) : []), [payload]);
+
+  const bounds = useMemo(() => (payload ? contentBounds(payload) : null), [payload]);
 
   const selected = useMemo(
     () => (filters.mode === "match" ? matches.find((m) => m.id === filters.matchId) : undefined),
@@ -155,7 +158,7 @@ export default function App() {
   }
 
   return (
-    <div className="app">
+    <div className={openPanel ? `app drawer-${openPanel}` : "app"}>
       <TopBar
         maps={index?.maps ?? []}
         mapId={mapId}
@@ -166,6 +169,8 @@ export default function App() {
         matchCount={matchCount}
         journeyCount={journeys.length}
         eventCount={markers.length}
+        onToggleLeft={() => setOpenPanel((p) => (p === "left" ? null : "left"))}
+        onToggleRight={() => setOpenPanel((p) => (p === "right" ? null : "right"))}
       />
 
       <DataPanel
@@ -191,6 +196,7 @@ export default function App() {
           pathAlpha={filters.pathAlpha}
           heat={heat}
           time={time}
+          bounds={bounds}
           fitToken={fitToken}
         />
 
@@ -230,6 +236,8 @@ export default function App() {
       </main>
 
       <LayersPanel counts={counts} filters={filters} onChange={setFilters} />
+
+      {openPanel && <div className="scrim" onClick={() => setOpenPanel(null)} />}
     </div>
   );
 }

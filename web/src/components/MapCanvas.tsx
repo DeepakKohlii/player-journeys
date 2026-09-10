@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { WORLD, type JourneyGeometry } from "../lib/data";
+import { WORLD, type Bounds, type JourneyGeometry } from "../lib/data";
 import { css, EVENT_COLOR, EVENT_LABEL, HUMAN, BOT } from "../lib/colors";
 import type { MarkerPoint } from "../lib/filters";
 
@@ -12,6 +12,7 @@ interface Props {
   pathAlpha: number;
   heat: ImageData | null;
   time: number | null; // null = whole match, otherwise seconds since match start
+  bounds: Bounds | null;
   fitToken: number;
 }
 
@@ -21,7 +22,18 @@ const MAX_DPR = 2;
 const MARKER_R = 2.6;
 const HIT_R = 7;
 
-const fitScale = (w: number, h: number) => (Math.min(w, h) * 0.94) / WORLD;
+const FULL: Bounds = { minX: 0, minY: 0, maxX: WORLD, maxY: WORLD };
+
+function fitTo(w: number, h: number, b: Bounds | null) {
+  const box = b ?? FULL;
+  const bw = Math.max(1, box.maxX - box.minX);
+  const bh = Math.max(1, box.maxY - box.minY);
+  return {
+    scale: Math.min(w / bw, h / bh) * 0.96,
+    cx: (box.minX + box.maxX) / 2,
+    cy: (box.minY + box.maxY) / 2,
+  };
+}
 
 // How many samples of a journey have happened by t. times is sorted.
 function upTo(times: number[], t: number) {
@@ -36,7 +48,7 @@ function upTo(times: number[], t: number) {
 }
 
 export default function MapCanvas({
-  bitmap, paths, markers, showPaths, dim, pathAlpha, heat, time, fitToken,
+  bitmap, paths, markers, showPaths, dim, pathAlpha, heat, time, bounds, fitToken,
 }: Props) {
   const wrap = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
@@ -51,6 +63,8 @@ export default function MapCanvas({
   const markersRef = useRef(markers);
   markersRef.current = markers;
   const heatCanvas = useRef<HTMLCanvasElement | null>(null);
+  const boundsRef = useRef(bounds);
+  boundsRef.current = bounds;
 
   // One Path2D per journey, built once in world space. Stroked separately so
   // overlapping routes build up alpha - that density is the whole point.
@@ -235,7 +249,7 @@ export default function MapCanvas({
       cv.height = h * dpr;
       cv.style.width = `${w}px`;
       cv.style.height = `${h}px`;
-      if (first) view.current.scale = fitScale(w, h);
+      if (first) view.current = { ...fitTo(w, h, boundsRef.current) };
       schedule();
     });
     ro.observe(el);
@@ -245,9 +259,9 @@ export default function MapCanvas({
   useEffect(() => {
     const { w, h } = size.current;
     if (!w) return;
-    view.current = { cx: WORLD / 2, cy: WORLD / 2, scale: fitScale(w, h) };
+    view.current = { ...fitTo(w, h, bounds) };
     schedule();
-  }, [fitToken, schedule]);
+  }, [fitToken, bounds, schedule]);
 
   // interaction
   useEffect(() => {
@@ -307,7 +321,7 @@ export default function MapCanvas({
       const my = e.clientY - rect.top;
       const { w, h } = size.current;
       const v = view.current;
-      const min = fitScale(w, h) * 0.9;
+      const min = fitTo(w, h, boundsRef.current).scale * 0.85;
       const next = Math.min(Math.max(v.scale * Math.exp(-e.deltaY * 0.0015), min), min * 40);
       // keep the point under the cursor fixed
       const wx = (mx - w / 2) / v.scale + v.cx;
