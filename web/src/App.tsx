@@ -28,9 +28,10 @@ export default function App() {
   useEffect(() => {
     let live = true;
     setPayload(null);
-    setFilters(defaultFilters());
     setTime(null);
     setPlaying(false);
+    // Keep how they're looking at the data; only drop what belongs to the old map.
+    setFilters((f) => ({ ...f, dates: [], matchId: null }));
     loadMap(mapId).then((p) => live && setPayload(p));
     return () => {
       live = false;
@@ -93,6 +94,12 @@ export default function App() {
     () => journeys.reduce((n, j) => Math.max(n, j.dur), 0),
     [journeys],
   );
+
+  // Match mode with nothing selected renders an empty map, so pick one.
+  useEffect(() => {
+    if (filters.mode !== "match" || filters.matchId || matches.length === 0) return;
+    setFilters((f) => ({ ...f, matchId: matches[0].id }));
+  }, [filters.mode, filters.matchId, matches]);
 
   useEffect(() => {
     setTime(null);
