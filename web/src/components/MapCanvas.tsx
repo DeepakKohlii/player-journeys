@@ -78,6 +78,7 @@ export default function MapCanvas({
   const markersRef = useRef(markers);
   markersRef.current = markers;
   const heatCanvas = useRef<HTMLCanvasElement | null>(null);
+  const baseCanvas = useRef<HTMLCanvasElement | null>(null);
   const boundsRef = useRef(bounds);
   boundsRef.current = bounds;
   const pathsRef = useRef(paths);
@@ -122,14 +123,10 @@ export default function MapCanvas({
     ctx.scale(scale, scale);
     ctx.translate(-cx, -cy);
 
-    if (bitmap) {
-      ctx.imageSmoothingQuality = "high";
-      ctx.drawImage(bitmap, 0, 0, WORLD, WORLD);
-      // Knock the art back so routes and markers are not camouflaged by it.
-      if (dim > 0) {
-        ctx.fillStyle = `rgba(6, 8, 12, ${dim})`;
-        ctx.fillRect(0, 0, WORLD, WORLD);
-      }
+    // "high" smoothing costs 14-21ms a frame under this transform; the default
+    // is 5-6ms and looks the same at these scales.
+    if (baseCanvas.current) {
+      ctx.drawImage(baseCanvas.current, 0, 0, WORLD, WORLD);
     }
 
     if (heatCanvas.current) {
@@ -245,6 +242,26 @@ export default function MapCanvas({
       drawRef.current();
     });
   }, []);
+
+  // The art and its dimming never change while panning, so bake them together.
+  useEffect(() => {
+    if (!bitmap) {
+      baseCanvas.current = null;
+      schedule();
+      return;
+    }
+    const c = document.createElement("canvas");
+    c.width = bitmap.width;
+    c.height = bitmap.height;
+    const bctx = c.getContext("2d")!;
+    bctx.drawImage(bitmap, 0, 0);
+    if (dim > 0) {
+      bctx.fillStyle = `rgba(6, 8, 12, ${dim})`;
+      bctx.fillRect(0, 0, c.width, c.height);
+    }
+    baseCanvas.current = c;
+    schedule();
+  }, [bitmap, dim, schedule]);
 
   useEffect(() => {
     if (!heat) {
