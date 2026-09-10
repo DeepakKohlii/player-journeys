@@ -47,6 +47,8 @@ export default function MapCanvas({
   const idleTimer = useRef(0);
 
   const [hover, setHover] = useState<{ m: MarkerPoint; x: number; y: number } | null>(null);
+  const markersRef = useRef(markers);
+  markersRef.current = markers;
 
   // One Path2D per journey, built once in world space. Stroked separately so
   // overlapping routes build up alpha - that density is the whole point.
@@ -171,13 +173,18 @@ export default function MapCanvas({
     ctx.restore();
   }, [bitmap, markers, showPaths, dim, pathAlpha, time, paths]);
 
+  // schedule must stay referentially stable - it is a dep of the resize and
+  // pointer effects, and during playback draw() changes every frame.
+  const drawRef = useRef(draw);
+  drawRef.current = draw;
+
   const schedule = useCallback(() => {
     if (frame.current) return;
     frame.current = requestAnimationFrame(() => {
       frame.current = 0;
-      draw();
+      drawRef.current();
     });
-  }, [draw]);
+  }, []);
 
   const markInteracting = useCallback(() => {
     interacting.current = true;
@@ -201,6 +208,7 @@ export default function MapCanvas({
       const w = Math.max(1, Math.round(e.contentRect.width));
       const h = Math.max(1, Math.round(e.contentRect.height));
       const dpr = Math.min(window.devicePixelRatio || 1, MAX_DPR);
+      if (size.current.w === w && size.current.h === h) return;
       const first = size.current.w === 0;
       size.current = { w, h };
       cv.width = w * dpr;
@@ -255,7 +263,7 @@ export default function MapCanvas({
       const { w, h } = size.current;
       let best: MarkerPoint | null = null;
       let bestD = HIT_R * HIT_R;
-      for (const m of markers) {
+      for (const m of markersRef.current) {
         const sx = (m.position[0] - cx) * scale + w / 2;
         const sy = (m.position[1] - cy) * scale + h / 2;
         const d = (sx - mx) ** 2 + (sy - my) ** 2;
@@ -302,7 +310,7 @@ export default function MapCanvas({
       cv.removeEventListener("pointerup", onUp);
       cv.removeEventListener("wheel", onWheel);
     };
-  }, [markers, schedule, markInteracting]);
+  }, [schedule, markInteracting]);
 
   const mmss = (t: number) => `${Math.floor(t / 60)}:${String(t % 60).padStart(2, "0")}`;
 
