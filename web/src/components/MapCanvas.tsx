@@ -56,8 +56,6 @@ export default function MapCanvas({
   const size = useRef({ w: 0, h: 0 });
   const dragging = useRef(false);
   const frame = useRef(0);
-  const interacting = useRef(false);
-  const idleTimer = useRef(0);
 
   const [hover, setHover] = useState<{ m: MarkerPoint; x: number; y: number } | null>(null);
   const markersRef = useRef(markers);
@@ -70,14 +68,18 @@ export default function MapCanvas({
   // overlapping routes build up alpha - that density is the whole point.
   const pathCache = useRef<{ path: Path2D; bot: boolean }[]>([]);
   useEffect(() => {
-    pathCache.current = paths
-      .filter((g) => g.coords.length > 1)
-      .map((g) => {
-        const p = new Path2D();
-        p.moveTo(g.coords[0][0], g.coords[0][1]);
-        for (let i = 1; i < g.coords.length; i++) p.lineTo(g.coords[i][0], g.coords[i][1]);
-        return { path: p, bot: !!g.journey.bot };
-      });
+    const build = (step: number) =>
+      paths
+        .filter((g) => g.coords.length > 1)
+        .map((g) => {
+          const p = new Path2D();
+          p.moveTo(g.coords[0][0], g.coords[0][1]);
+          for (let i = step; i < g.coords.length; i += step) p.lineTo(g.coords[i][0], g.coords[i][1]);
+          const last = g.coords[g.coords.length - 1];
+          p.lineTo(last[0], last[1]);
+          return { path: p, bot: !!g.journey.bot };
+        });
+    pathCache.current = build(1);
     schedule();
   }, [paths]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -118,11 +120,10 @@ export default function MapCanvas({
       ctx.lineWidth = 1 / scale; // constant 1px on screen
       ctx.lineJoin = "round";
       ctx.globalAlpha = pathAlpha;
-      // Skip half the routes mid-drag so panning stays responsive.
-      const step = interacting.current && pathCache.current.length > 250 ? 2 : 1;
+      const cache = pathCache.current;
       let current = "";
-      for (let i = 0; i < pathCache.current.length; i += step) {
-        const { path, bot } = pathCache.current[i];
+      for (let i = 0; i < cache.length; i++) {
+        const { path, bot } = cache[i];
         const color = bot ? css(BOT) : css(HUMAN);
         if (color !== current) {
           ctx.strokeStyle = color;
@@ -152,7 +153,7 @@ export default function MapCanvas({
     // Markers in screen space so radius stays constant.
     ctx.save();
     ctx.scale(dpr, dpr);
-    const r = interacting.current ? MARKER_R * 0.8 : MARKER_R;
+    const r = MARKER_R;
     const byType = new Map<string, Path2D>();
     for (const m of markers) {
       if (time !== null && m.t > time) continue;
@@ -172,7 +173,7 @@ export default function MapCanvas({
 
     // Where everyone actually is at this instant.
     if (time !== null) {
-      // Shrink the dots when the whole map is playing back at once.
+      // Smaller dots when the whole map plays back at once, larger for one match.
       const hr = paths.length > 150 ? 2 : 3.6;
       const heads = { human: new Path2D(), bot: new Path2D() };
       for (const g of paths) {
@@ -219,15 +220,6 @@ export default function MapCanvas({
     }
     schedule();
   }, [heat, schedule]);
-
-  const markInteracting = useCallback(() => {
-    interacting.current = true;
-    clearTimeout(idleTimer.current);
-    idleTimer.current = window.setTimeout(() => {
-      interacting.current = false;
-      schedule();
-    }, 140);
-  }, [schedule]);
 
   useEffect(() => {
     schedule();
@@ -287,7 +279,6 @@ export default function MapCanvas({
         view.current.cy -= (e.clientY - lastY) / scale;
         lastX = e.clientX;
         lastY = e.clientY;
-        markInteracting();
         schedule();
         return;
       }
@@ -329,7 +320,6 @@ export default function MapCanvas({
       v.cx = wx - (mx - w / 2) / next;
       v.cy = wy - (my - h / 2) / next;
       v.scale = next;
-      markInteracting();
       schedule();
     };
 
@@ -344,7 +334,7 @@ export default function MapCanvas({
       cv.removeEventListener("pointerup", onUp);
       cv.removeEventListener("wheel", onWheel);
     };
-  }, [schedule, markInteracting]);
+  }, [schedule]);
 
   const mmss = (t: number) => `${Math.floor(t / 60)}:${String(t % 60).padStart(2, "0")}`;
 
