@@ -25,15 +25,15 @@ export default function MatchList({ rows, selected, onSelect }: Props) {
   }, [rows, query, multiOnly]);
 
   return (
-    <section>
+    <section className="block">
       <h2>
         Match
-        <span className="count">{shown.length}</span>
+        <span className="n">{shown.length}</span>
       </h2>
 
       <input
         className="search"
-        placeholder="Search match id"
+        placeholder="search match id"
         value={query}
         onChange={(e) => setQuery(e.target.value)}
       />

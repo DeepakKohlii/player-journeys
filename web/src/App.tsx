@@ -3,7 +3,10 @@ import { loadIndex, loadMap, toGeometry, WORLD } from "./lib/data";
 import {
   countEvents, datesOf, defaultFilters, filterJourneys, markersOf, matchRows, type Filters,
 } from "./lib/filters";
-import FilterRail from "./components/FilterRail";
+import TopBar from "./components/TopBar";
+import DataPanel from "./components/DataPanel";
+import LayersPanel from "./components/LayersPanel";
+import Hero from "./components/Hero";
 import MapCanvas from "./components/MapCanvas";
 import Timeline from "./components/Timeline";
 import { buildHeat } from "./lib/heat";
@@ -17,12 +20,20 @@ export default function App() {
   const [filters, setFilters] = useState<Filters>(defaultFilters);
   const [bitmap, setBitmap] = useState<ImageBitmap | null>(null);
   const [fitToken, setFitToken] = useState(0);
+  const [entered, setEntered] = useState(() => location.hash === "#console");
   const [time, setTime] = useState<number | null>(null);
   const [playing, setPlaying] = useState(false);
   const [speed, setSpeed] = useState(4);
 
   useEffect(() => {
     loadIndex().then(setIndex);
+  }, []);
+
+  // Keeps the browser back button working between hero and console.
+  useEffect(() => {
+    const onHash = () => setEntered(location.hash === "#console");
+    addEventListener("hashchange", onHash);
+    return () => removeEventListener("hashchange", onHash);
   }, []);
 
   useEffect(() => {
@@ -132,22 +143,44 @@ export default function App() {
     setPlaying((p) => !p);
   };
 
+  if (!entered) {
+    return (
+      <Hero
+        onEnter={() => {
+          location.hash = "#console";
+          setEntered(true);
+        }}
+      />
+    );
+  }
+
   return (
     <div className="app">
-      <FilterRail
+      <TopBar
         maps={index?.maps ?? []}
         mapId={mapId}
         onMapChange={setMapId}
-        payload={payload}
+        filters={filters}
+        onChange={setFilters}
+        firstMatchId={matches[0]?.id ?? null}
+        matchCount={matchCount}
+        journeyCount={journeys.length}
+        eventCount={markers.length}
+      />
+
+      <DataPanel
         dates={dates}
-        counts={counts}
         matches={matches}
         filters={filters}
         onChange={setFilters}
       />
 
       <main className="stage">
-        {!payload && <div className="loading">Loading…</div>}
+        <span className="corner tl" />
+        <span className="corner tr" />
+        <span className="corner bl" />
+        <span className="corner br" />
+        {!payload && <div className="loading">loading telemetry</div>}
 
         <MapCanvas
           bitmap={bitmap}
@@ -167,6 +200,18 @@ export default function App() {
           </button>
         )}
 
+        {selected && (
+          <div className="selinfo">
+            <b>{selected.id.slice(0, 8)}</b>
+            <span>{selected.date.slice(8)} Feb</span>
+            <span>
+              {Math.floor(selected.dur / 60)}:{String(selected.dur % 60).padStart(2, "0")}
+            </span>
+            <span>{selected.humans}H · {selected.bots}B</span>
+            <span>{selected.events} events</span>
+          </div>
+        )}
+
         {payload && maxT > 0 && (
           <Timeline
             time={time}
@@ -182,29 +227,9 @@ export default function App() {
           />
         )}
 
-        {payload && (
-          <div className="readout">
-            {selected ? (
-              <>
-                <b>{selected.id.slice(0, 8)}</b>
-                <span />
-                {Math.floor(selected.dur / 60)}:
-                {String(selected.dur % 60).padStart(2, "0")} long
-                <span />
-                <b>{selected.humans}</b> human {selected.bots > 0 && <><b>{selected.bots}</b> bot</>}
-              </>
-            ) : (
-              <>
-                <b>{matchCount.toLocaleString()}</b> matches
-                <span />
-                <b>{journeys.length.toLocaleString()}</b> journeys
-              </>
-            )}
-            <span />
-            <b>{markers.length.toLocaleString()}</b> events shown
-          </div>
-        )}
       </main>
+
+      <LayersPanel counts={counts} filters={filters} onChange={setFilters} />
     </div>
   );
 }
