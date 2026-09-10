@@ -10,6 +10,7 @@ interface Props {
   showPaths: boolean;
   dim: number;
   pathAlpha: number;
+  heat: ImageData | null;
   time: number | null; // null = whole match, otherwise seconds since match start
   fitToken: number;
 }
@@ -35,7 +36,7 @@ function upTo(times: number[], t: number) {
 }
 
 export default function MapCanvas({
-  bitmap, paths, markers, showPaths, dim, pathAlpha, time, fitToken,
+  bitmap, paths, markers, showPaths, dim, pathAlpha, heat, time, fitToken,
 }: Props) {
   const wrap = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
@@ -49,6 +50,7 @@ export default function MapCanvas({
   const [hover, setHover] = useState<{ m: MarkerPoint; x: number; y: number } | null>(null);
   const markersRef = useRef(markers);
   markersRef.current = markers;
+  const heatCanvas = useRef<HTMLCanvasElement | null>(null);
 
   // One Path2D per journey, built once in world space. Stroked separately so
   // overlapping routes build up alpha - that density is the whole point.
@@ -91,6 +93,11 @@ export default function MapCanvas({
         ctx.fillStyle = `rgba(6, 8, 12, ${dim})`;
         ctx.fillRect(0, 0, WORLD, WORLD);
       }
+    }
+
+    if (heatCanvas.current) {
+      ctx.imageSmoothingEnabled = true;
+      ctx.drawImage(heatCanvas.current, 0, 0, WORLD, WORLD);
     }
 
     if (showPaths && time === null) {
@@ -171,7 +178,7 @@ export default function MapCanvas({
       ctx.fill(heads.bot);
     }
     ctx.restore();
-  }, [bitmap, markers, showPaths, dim, pathAlpha, time, paths]);
+  }, [bitmap, markers, showPaths, dim, pathAlpha, time, paths, heat]);
 
   // schedule must stay referentially stable - it is a dep of the resize and
   // pointer effects, and during playback draw() changes every frame.
@@ -185,6 +192,19 @@ export default function MapCanvas({
       drawRef.current();
     });
   }, []);
+
+  useEffect(() => {
+    if (!heat) {
+      heatCanvas.current = null;
+    } else {
+      const c = document.createElement("canvas");
+      c.width = heat.width;
+      c.height = heat.height;
+      c.getContext("2d")!.putImageData(heat, 0, 0);
+      heatCanvas.current = c;
+    }
+    schedule();
+  }, [heat, schedule]);
 
   const markInteracting = useCallback(() => {
     interacting.current = true;

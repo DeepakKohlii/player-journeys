@@ -6,6 +6,7 @@ import {
 import FilterRail from "./components/FilterRail";
 import MapCanvas from "./components/MapCanvas";
 import Timeline from "./components/Timeline";
+import { buildHeat } from "./lib/heat";
 import type { DataIndex, MapPayload } from "./types";
 import "./App.css";
 
@@ -81,6 +82,11 @@ export default function App() {
 
   const matchCount = useMemo(() => new Set(journeys.map((j) => j.m)).size, [journeys]);
 
+  const heat = useMemo(
+    () => (payload ? buildHeat(filters.heat, geometry, payload.eventTypes) : null),
+    [payload, geometry, filters.heat],
+  );
+
   // Longest journey in the current selection - every journey starts at 0 because
   // the pipeline rebased each one onto its own match clock.
   const maxT = useMemo(
@@ -143,6 +149,7 @@ export default function App() {
           showPaths={filters.showPaths}
           dim={filters.dim}
           pathAlpha={filters.pathAlpha}
+          heat={heat}
           time={time}
           fitToken={fitToken}
         />

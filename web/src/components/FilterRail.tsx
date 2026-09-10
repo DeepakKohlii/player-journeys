@@ -2,6 +2,7 @@ import type { MapIndexEntry, MapPayload } from "../types";
 import { css, EVENT_COLOR, EVENT_LABEL, HUMAN, BOT, MARKER_EVENTS } from "../lib/colors";
 import { toggle, type Filters, type MatchRow } from "../lib/filters";
 import MatchList from "./MatchList";
+import { HEAT_MODES } from "../lib/heat";
 
 interface Props {
   maps: MapIndexEntry[];
@@ -119,6 +120,21 @@ export default function FilterRail(props: Props) {
           <span className="swatch line" />
           Show paths
         </label>
+      </section>
+
+      <section>
+        <h2>Heatmap</h2>
+        <div className="heat">
+          {HEAT_MODES.map((m) => (
+            <button
+              key={m.id}
+              className={filters.heat === m.id ? "heatbtn on" : "heatbtn"}
+              onClick={() => set({ heat: m.id })}
+            >
+              {m.label}
+            </button>
+          ))}
+        </div>
       </section>
 
       <section>

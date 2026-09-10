@@ -1,5 +1,6 @@
 import type { EventType, Journey, MapPayload } from "../types";
 import { MARKER_EVENTS } from "./colors";
+import type { HeatMode } from "./heat";
 
 export type Mode = "explore" | "match";
 
@@ -13,6 +14,7 @@ export interface Filters {
   showPaths: boolean;
   dim: number;       // how far to darken the minimap art, 0-0.9
   pathAlpha: number;
+  heat: HeatMode;
 }
 
 export const defaultFilters = (): Filters => ({
@@ -25,6 +27,7 @@ export const defaultFilters = (): Filters => ({
   showPaths: true,
   dim: 0.55,
   pathAlpha: 0.3,
+  heat: "off",
 });
 
 export function datesOf(p: MapPayload): string[] {
