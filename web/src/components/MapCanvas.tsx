@@ -228,7 +228,7 @@ export default function MapCanvas({
       ctx.fill(heads.bot);
     }
     ctx.restore();
-  }, [bitmap, markers, showPaths, dim, pathAlpha, time, paths, heat, selected]);
+  }, [markers, showPaths, pathAlpha, time, paths, selected]);
 
   // schedule must stay referentially stable - it is a dep of the resize and
   // pointer effects, and during playback draw() changes every frame.
@@ -425,7 +425,7 @@ export default function MapCanvas({
 
   return (
     <div className="canvas-wrap" ref={wrap}>
-      <canvas ref={canvas} className={dragging.current ? "grabbing" : ""} />
+      <canvas ref={canvas} />
       {hover && (
         <div
           className="tip"

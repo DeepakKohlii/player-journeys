@@ -188,7 +188,7 @@ input[type="range"]::-webkit-slider-thumb {
 .stage { position: relative; overflow: hidden; z-index: 1; }
 .canvas-wrap { position: absolute; inset: 0; }
 .canvas-wrap canvas { display: block; cursor: grab; touch-action: none; }
-.canvas-wrap canvas.grabbing { cursor: grabbing; }
+.canvas-wrap canvas:active { cursor: grabbing; }
 
 .corner {
   position: absolute; width: 16px; height: 16px; z-index: 2;
