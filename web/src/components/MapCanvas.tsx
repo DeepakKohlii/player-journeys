@@ -13,6 +13,8 @@ interface Props {
   heat: ImageData | null;
   time: number | null; // null = whole match, otherwise seconds since match start
   bounds: Bounds | null;
+  selected: number | null;
+  onSelect: (i: number | null) => void;
   fitToken: number;
 }
 
@@ -35,6 +37,20 @@ function fitTo(w: number, h: number, b: Bounds | null) {
   };
 }
 
+// Squared distance from a point to a line segment. Position samples are 5s
+// apart, so a route is mostly long straight segments - testing only the
+// vertices would miss clicks on the visible line between them.
+function distToSeg(px: number, py: number, ax: number, ay: number, bx: number, by: number) {
+  const dx = bx - ax;
+  const dy = by - ay;
+  const l2 = dx * dx + dy * dy;
+  let t = l2 === 0 ? 0 : ((px - ax) * dx + (py - ay) * dy) / l2;
+  t = t < 0 ? 0 : t > 1 ? 1 : t;
+  const qx = ax + t * dx;
+  const qy = ay + t * dy;
+  return (px - qx) ** 2 + (py - qy) ** 2;
+}
+
 // How many samples of a journey have happened by t. times is sorted.
 function upTo(times: number[], t: number) {
   let lo = 0;
@@ -48,7 +64,8 @@ function upTo(times: number[], t: number) {
 }
 
 export default function MapCanvas({
-  bitmap, paths, markers, showPaths, dim, pathAlpha, heat, time, bounds, fitToken,
+  bitmap, paths, markers, showPaths, dim, pathAlpha, heat, time, bounds,
+  selected, onSelect, fitToken,
 }: Props) {
   const wrap = useRef<HTMLDivElement>(null);
   const canvas = useRef<HTMLCanvasElement>(null);
@@ -63,6 +80,10 @@ export default function MapCanvas({
   const heatCanvas = useRef<HTMLCanvasElement | null>(null);
   const boundsRef = useRef(bounds);
   boundsRef.current = bounds;
+  const pathsRef = useRef(paths);
+  pathsRef.current = paths;
+  const selectRef = useRef(onSelect);
+  selectRef.current = onSelect;
 
   // One Path2D per journey, built once in world space. Stroked separately so
   // overlapping routes build up alpha - that density is the whole point.
@@ -123,13 +144,21 @@ export default function MapCanvas({
       const cache = pathCache.current;
       let current = "";
       for (let i = 0; i < cache.length; i++) {
+        if (selected !== null && i === selected) continue;
         const { path, bot } = cache[i];
         const color = bot ? css(BOT) : css(HUMAN);
         if (color !== current) {
           ctx.strokeStyle = color;
           current = color;
         }
+        ctx.globalAlpha = selected === null ? pathAlpha : pathAlpha * 0.25;
         ctx.stroke(path);
+      }
+      if (selected !== null && cache[selected]) {
+        ctx.globalAlpha = 1;
+        ctx.lineWidth = 2 / scale;
+        ctx.strokeStyle = cache[selected].bot ? css(BOT) : css(HUMAN);
+        ctx.stroke(cache[selected].path);
       }
       ctx.globalAlpha = 1;
     } else if (showPaths && time !== null) {
@@ -153,23 +182,32 @@ export default function MapCanvas({
     // Markers in screen space so radius stays constant.
     ctx.save();
     ctx.scale(dpr, dpr);
-    const r = MARKER_R;
     const byType = new Map<string, Path2D>();
+    const storm = new Path2D();
     for (const m of markers) {
       if (time !== null && m.t > time) continue;
       const sx = (m.position[0] - cx) * scale + w / 2;
       const sy = (m.position[1] - cy) * scale + h / 2;
-      if (sx < -8 || sy < -8 || sx > w + 8 || sy > h + 8) continue;
+      if (sx < -10 || sy < -10 || sx > w + 10 || sy > h + 10) continue;
+      const r = m.type === "KilledByStorm" ? MARKER_R * 1.7 : MARKER_R;
       let p = byType.get(m.type);
       if (!p) byType.set(m.type, (p = new Path2D()));
       p.moveTo(sx + r, sy);
       p.arc(sx, sy, r, 0, Math.PI * 2);
+      if (m.type === "KilledByStorm") {
+        storm.moveTo(sx + r + 3, sy);
+        storm.arc(sx, sy, r + 3, 0, Math.PI * 2);
+      }
     }
     ctx.globalAlpha = 0.85;
     for (const [type, p] of byType) {
       ctx.fillStyle = css(EVENT_COLOR[type] ?? [200, 200, 200]);
       ctx.fill(p);
     }
+    ctx.globalAlpha = 0.65;
+    ctx.lineWidth = 1;
+    ctx.strokeStyle = css(EVENT_COLOR.KilledByStorm);
+    ctx.stroke(storm);
 
     // Where everyone actually is at this instant.
     if (time !== null) {
@@ -193,7 +231,7 @@ export default function MapCanvas({
       ctx.fill(heads.bot);
     }
     ctx.restore();
-  }, [bitmap, markers, showPaths, dim, pathAlpha, time, paths, heat]);
+  }, [bitmap, markers, showPaths, dim, pathAlpha, time, paths, heat, selected]);
 
   // schedule must stay referentially stable - it is a dep of the resize and
   // pointer effects, and during playback draw() changes every frame.
@@ -263,11 +301,14 @@ export default function MapCanvas({
     let lastX = 0;
     let lastY = 0;
 
+    let downX = 0;
+    let downY = 0;
+
     const onDown = (e: PointerEvent) => {
       dragging.current = true;
-      lastX = e.clientX;
-      lastY = e.clientY;
-      cv.setPointerCapture(e.pointerId);
+      lastX = downX = e.clientX;
+      lastY = downY = e.clientY;
+      try { cv.setPointerCapture(e.pointerId); } catch { /* capture is optional */ }
       setHover(null);
     };
 
@@ -302,7 +343,34 @@ export default function MapCanvas({
 
     const onUp = (e: PointerEvent) => {
       dragging.current = false;
-      cv.releasePointerCapture(e.pointerId);
+      try { cv.releasePointerCapture(e.pointerId); } catch { /* never block the click */ }
+      if (Math.abs(e.clientX - downX) > 4 || Math.abs(e.clientY - downY) > 4) return;
+
+      const rect = cv.getBoundingClientRect();
+      const mx = e.clientX - rect.left;
+      const my = e.clientY - rect.top;
+      const { cx, cy, scale } = view.current;
+      const { w, h } = size.current;
+      let best = -1;
+      let bestD = 64; // 8px in screen space
+      pathsRef.current.forEach((g, idx) => {
+        let ax = 0;
+        let ay = 0;
+        for (let i = 0; i < g.coords.length; i++) {
+          const bx = (g.coords[i][0] - cx) * scale + w / 2;
+          const by = (g.coords[i][1] - cy) * scale + h / 2;
+          if (i > 0) {
+            const d = distToSeg(mx, my, ax, ay, bx, by);
+            if (d < bestD) {
+              bestD = d;
+              best = idx;
+            }
+          }
+          ax = bx;
+          ay = by;
+        }
+      });
+      selectRef.current(best >= 0 ? best : null);
     };
 
     const onWheel = (e: WheelEvent) => {

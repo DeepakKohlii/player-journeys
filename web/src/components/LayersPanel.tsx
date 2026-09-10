@@ -11,6 +11,7 @@ interface Props {
 const HEAT_TINT: Record<string, string> = {
   off: "#43506a",
   traffic: "#00e5ff",
+  cold: "#ffb800",
   loot: "#4ade80",
   kills: "#ef4444",
   deaths: "#a78bfa",

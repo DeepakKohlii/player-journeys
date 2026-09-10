@@ -10,17 +10,21 @@ import Hero from "./components/Hero";
 import MapCanvas from "./components/MapCanvas";
 import Timeline from "./components/Timeline";
 import { buildHeat } from "./lib/heat";
+import { decode, encode } from "./lib/urlState";
+import JourneyCard from "./components/JourneyCard";
 import type { DataIndex, MapPayload } from "./types";
 import "./App.css";
 
 export default function App() {
   const [index, setIndex] = useState<DataIndex | null>(null);
-  const [mapId, setMapId] = useState("AmbroseValley");
+  const initial = useMemo(() => decode(location.hash, "AmbroseValley"), []);
+  const [mapId, setMapId] = useState(initial.mapId);
   const [payload, setPayload] = useState<MapPayload | null>(null);
-  const [filters, setFilters] = useState<Filters>(defaultFilters);
+  const [filters, setFilters] = useState<Filters>(initial.filters);
   const [bitmap, setBitmap] = useState<ImageBitmap | null>(null);
   const [fitToken, setFitToken] = useState(0);
-  const [entered, setEntered] = useState(() => location.hash === "#console");
+  const [entered, setEntered] = useState(() => location.hash.startsWith("#console"));
+  const [picked, setPicked] = useState<number | null>(null);
   const [openPanel, setOpenPanel] = useState<"left" | "right" | null>(null);
   const [time, setTime] = useState<number | null>(null);
   const [playing, setPlaying] = useState(false);
@@ -30,12 +34,18 @@ export default function App() {
     loadIndex().then(setIndex);
   }, []);
 
-  // Keeps the browser back button working between hero and console.
+  // Back button, and re-reading a link pasted into an already open tab.
+  // Our own replaceState calls do not fire hashchange, so this cannot loop.
   useEffect(() => {
-    const onHash = () => setEntered(location.hash === "#console");
+    const onHash = () => {
+      setEntered(location.hash.startsWith("#console"));
+      const next = decode(location.hash, mapId);
+      setMapId(next.mapId);
+      setFilters(next.filters);
+    };
     addEventListener("hashchange", onHash);
     return () => removeEventListener("hashchange", onHash);
-  }, []);
+  }, [mapId]);
 
   useEffect(() => {
     let live = true;
@@ -66,6 +76,13 @@ export default function App() {
       live = false;
     };
   }, [mapId]);
+
+  useEffect(() => {
+    if (!entered) return;
+    history.replaceState(null, "", encode(mapId, filters));
+  }, [entered, mapId, filters]);
+
+  useEffect(() => setPicked(null), [mapId, filters]);
 
   const dates = useMemo(() => (payload ? datesOf(payload) : []), [payload]);
 
@@ -150,7 +167,7 @@ export default function App() {
     return (
       <Hero
         onEnter={() => {
-          location.hash = "#console";
+          location.hash = encode(mapId, filters).slice(1);
           setEntered(true);
         }}
       />
@@ -187,6 +204,14 @@ export default function App() {
         <span className="corner br" />
         {!payload && <div className="loading">loading telemetry</div>}
 
+        {payload && journeys.length === 0 && (
+          <div className="empty">
+            <b>Nothing matches these filters</b>
+            <p>No journeys on {payload.label} for the current selection.</p>
+            <button onClick={() => setFilters(defaultFilters())}>Reset filters</button>
+          </div>
+        )}
+
         <MapCanvas
           bitmap={bitmap}
           paths={geometry}
@@ -197,6 +222,8 @@ export default function App() {
           heat={heat}
           time={time}
           bounds={bounds}
+          selected={picked}
+          onSelect={setPicked}
           fitToken={fitToken}
         />
 
@@ -204,6 +231,14 @@ export default function App() {
           <button className="reset" onClick={() => setFitToken((n) => n + 1)}>
             Reset view
           </button>
+        )}
+
+        {picked !== null && journeys[picked] && payload && (
+          <JourneyCard
+            journey={journeys[picked]}
+            eventTypes={payload.eventTypes}
+            onClose={() => setPicked(null)}
+          />
         )}
 
         {selected && (

@@ -1,10 +1,11 @@
 import { WORLD, type JourneyGeometry } from "./data";
 
-export type HeatMode = "off" | "traffic" | "loot" | "kills" | "deaths";
+export type HeatMode = "off" | "traffic" | "cold" | "loot" | "kills" | "deaths";
 
 export const HEAT_MODES: { id: HeatMode; label: string }[] = [
   { id: "off", label: "Off" },
   { id: "traffic", label: "Traffic" },
+  { id: "cold", label: "Dead space" },
   { id: "loot", label: "Loot density" },
   { id: "kills", label: "Kill zones" },
   { id: "deaths", label: "Death zones" },
@@ -18,6 +19,7 @@ type Stop = [number, number, number];
 
 const RAMPS: Record<Exclude<HeatMode, "off">, [Stop, Stop, Stop]> = {
   traffic: [[10, 34, 74], [56, 189, 248], [226, 248, 255]],
+  cold: [[58, 40, 6], [255, 184, 0], [255, 242, 206]],
   loot: [[8, 52, 28], [74, 222, 128], [235, 255, 241]],
   kills: [[74, 14, 14], [239, 68, 68], [255, 228, 186]],
   deaths: [[44, 24, 82], [167, 139, 250], [242, 238, 255]],
@@ -78,7 +80,7 @@ export function buildHeat(
     g[y * GRID + x] += 1;
   };
 
-  if (mode === "traffic") {
+  if (mode === "traffic" || mode === "cold") {
     for (const j of paths) for (const c of j.coords) add(c[0], c[1]);
   } else {
     const keep =
@@ -94,10 +96,32 @@ export function buildHeat(
     }
   }
 
-  boxBlur(g, GRID, 3);
-  boxBlur(g, GRID, 3);
+  // Dead space is the inverse of traffic, but only inside the area players
+  // actually reach - the ocean is empty too and highlighting it says nothing.
+  if (mode === "cold") {
+    // The envelope hugs the walkable area. Blur it too wide and the overlay
+    // bleeds into ocean and out-of-bounds, which nobody ignored - it is simply
+    // not playable. A tight blur plus a steep mask keeps it on real ground.
+    const envelope = Float32Array.from(g);
+    boxBlur(envelope, GRID, 6);
+    boxBlur(envelope, GRID, 6);
+    boxBlur(g, GRID, 3);
+    boxBlur(g, GRID, 3);
+    const busyTop = upperBound(g);
+    const envTop = upperBound(envelope);
+    if (busyTop <= 0 || envTop <= 0) return null;
+    for (let i = 0; i < g.length; i++) {
+      const e = envelope[i] / envTop;
+      const reachable = Math.min(1, Math.max(0, (e - 0.1) / 0.25));
+      const busy = Math.min(1, g[i] / busyTop);
+      g[i] = reachable * Math.pow(1 - busy, 2.4);
+    }
+  } else {
+    boxBlur(g, GRID, 3);
+    boxBlur(g, GRID, 3);
+  }
 
-  const top = upperBound(g);
+  const top = mode === "cold" ? 1 : upperBound(g);
   if (top <= 0) return null;
 
   const ramp = RAMPS[mode];
@@ -111,7 +135,7 @@ export function buildHeat(
     out[o] = c[0];
     out[o + 1] = c[1];
     out[o + 2] = c[2];
-    out[o + 3] = e * 235;
+    out[o + 3] = e * (mode === "cold" ? 170 : 235);
   }
   return new ImageData(out, GRID, GRID);
 }
