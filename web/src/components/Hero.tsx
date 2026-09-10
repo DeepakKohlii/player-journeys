@@ -9,8 +9,8 @@ interface Props {
 interface Line { pts: [number, number][]; bot: boolean }
 
 const STATS = [
-  { n: "89,104", l: "events" },
-  { n: "1,243", l: "journeys" },
+  { n: "87,599", l: "events" },
+  { n: "1,242", l: "journeys" },
   { n: "796", l: "matches" },
   { n: "339", l: "players" },
   { n: "3", l: "maps" },
