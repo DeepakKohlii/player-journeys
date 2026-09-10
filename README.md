@@ -4,7 +4,7 @@ A player-journey visualisation tool for **LILA BLACK**. It turns five days of ra
 match telemetry into a map a Level Designer can open and actually use — routes,
 events, heatmaps and match playback, on the correct minimap.
 
-**Live:** _<add the deployed URL here>_
+**Live:** _<https://player-journeys.vercel.app/>_
 
 ---
 
