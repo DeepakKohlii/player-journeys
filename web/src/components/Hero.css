@@ -76,12 +76,17 @@
 .tag b { color: var(--fg); font-weight: 600; }
 
 .herostats {
-  display: flex; flex-wrap: wrap; justify-content: center; gap: 1px;
-  margin-top: 6px; border: 1px solid var(--line); background: var(--line);
+  display: grid; grid-template-columns: repeat(6, 1fr); gap: 1px;
+  width: 100%; max-width: 700px; margin-top: 6px;
+  border: 1px solid var(--line); background: var(--line);
 }
 .herostats > div {
-  display: grid; gap: 3px; min-width: 96px; padding: 12px 18px;
+  display: grid; gap: 3px; padding: 12px 10px;
   background: rgba(8, 12, 20, .82);
+}
+/* six across only reads on a wide viewport; below that go two clean rows */
+@media (max-width: 720px) {
+  .herostats { grid-template-columns: repeat(3, 1fr); }
 }
 .herostats b {
   font-family: var(--mono); font-size: 17px; font-weight: 500; color: var(--cyan);
